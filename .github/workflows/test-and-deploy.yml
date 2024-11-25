@@ -1,5 +1,9 @@
 name: Test and Deploy
-on: [push]
+
+concurrency: prod
+on:
+  push:
+    branches: [ "main" ]
 
 permissions:
   id-token: write
@@ -9,6 +13,10 @@ permissions:
 jobs:
   Test-and-Deploy:
     runs-on: ubuntu-latest
+    environment: prod
+    env:
+      DOCKER_REGISTRY_HOSTNAME: ${{ vars.DOCKER_REGISTRY_HOSTNAME }}
+      DOCKER_IMAGE_PATH: ${{ vars.DOCKER_IMAGE_PATH }}
     steps:
       - name: Checkout the repository
         uses: actions/checkout@v2
@@ -17,7 +25,25 @@ jobs:
           mkdir ${{ github.workspace }}/results
           chmod a+w ${{ github.workspace }}/results
       - name: Run the tests
-        run: docker compose run --rm --volume=${{ github.workspace }}/results:/backend/results backend pytest --junit-xml=/backend/results/report.xml
+        run: |
+          env
+          docker compose run --rm --volume=${{ github.workspace }}/results:/backend/results backend pytest --junit-xml=/backend/results/report.xml
+      - name: GCP Auth
+        id: 'auth'
+        uses: 'google-github-actions/auth@v2'
+        with:
+          credentials_json: ${{ secrets.GOOGLE_APPLICATION_CREDENTIALS }}
+      - name: Docker Auth
+        run: |
+          gcloud auth configure-docker ${{ vars.DOCKER_REGISTRY_HOSTNAME }} --quiet
+      - name: Push docker image
+        run: docker push ${DOCKER_REGISTRY_HOSTNAME}/${DOCKER_IMAGE_PATH}:${GITHUB_SHA}
+      - name: Terraform deploy
+        working-directory: gcp_infra
+        run: |
+          CREDS=$(cat ${{ steps.auth.outputs.credentials_file_path }} | base64)
+          terraform init -backend-config=base.tfbackend -var "credentials_json_base64=$CREDS"
+          terraform apply -auto-approve -var "image=${DOCKER_REGISTRY_HOSTNAME}/${DOCKER_IMAGE_PATH}:${GITHUB_SHA}" -var "credentials_json_base64=${CREDS}" 
       - name: Test Report
         uses: dorny/test-reporter@v1
         if: success() || failure()
