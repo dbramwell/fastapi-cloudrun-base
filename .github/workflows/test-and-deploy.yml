@@ -1,0 +1,27 @@
+name: Test and Deploy
+on: [push]
+
+permissions:
+  id-token: write
+  contents: read
+  checks: write
+
+jobs:
+  Test-and-Deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout the repository
+        uses: actions/checkout@v2
+      - name: Create Test Output directory
+        run: |
+          mkdir ${{ github.workspace }}/results
+          chmod a+w ${{ github.workspace }}/results
+      - name: Run the tests
+        run: docker compose run --rm --volume=${{ github.workspace }}/results:/backend/results backend pytest --junit-xml=/backend/results/report.xml
+      - name: Test Report
+        uses: dorny/test-reporter@v1
+        if: success() || failure()
+        with:
+          name: Pytest Tests
+          path: ${{ github.workspace }}/results/*.xml
+          reporter: 'java-junit'
