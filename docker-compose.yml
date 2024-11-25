@@ -5,6 +5,7 @@ services:
       - ./backend:/backend
     ports:
       - "8000:8000"
+    working_dir: /backend
     command: fastapi dev src/main.py --host 0.0.0.0
 
 volumes:
