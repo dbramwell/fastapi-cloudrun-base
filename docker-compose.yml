@@ -4,7 +4,7 @@ services:
       context: ./backend
       dockerfile: Dockerfile
       tags:
-        - ${DOCKER_REGISTRY_HOSTNAME}/${DOCKER_IMAGE_PATH}:${GITHUB_SHA:-latest}
+        - ${DOCKER_TAG:-latest}
     volumes:
       - ./backend:/backend
     ports:
